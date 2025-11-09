@@ -207,7 +207,7 @@ def clean_text(text):
 #         'Positive': probabilities[1] * 100
 #     }
     
-    return prediction, confidence, prob_dict
+    # return prediction, confidence, prob_dict
 
 def predict_sentiment(text, tfidf, model):
     cleaned_text = clean_text(text)
