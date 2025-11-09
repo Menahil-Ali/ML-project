@@ -1,3 +1,11 @@
+import pickle
+
+# Load pre-trained model and vectorizer
+with open('tfidf_vectorizer.pkl', 'rb') as f:
+    tfidf = pickle.load(f)
+
+with open('best_sentiment_model.pkl', 'rb') as f:
+    model = pickle.load(f)
 import streamlit as st
 import pickle
 import re
