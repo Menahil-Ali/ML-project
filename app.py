@@ -5,8 +5,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import time
 
-# Page configuration
+# ========================================
+# PAGE CONFIGURATION
+# ========================================
 st.set_page_config(
     page_title="Sentiment Analysis App",
     page_icon="🎭",
@@ -14,399 +17,553 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UI
+# ========================================
+# CUSTOM CSS FOR BEAUTIFUL UI
+# ========================================
 st.markdown("""
     <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .stTextArea textarea {
-        border-radius: 10px;
-        border: 2px solid #4CAF50;
-        font-size: 16px;
-    }
-    .prediction-box {
-        padding: 20px;
-        border-radius: 15px;
-        margin: 10px 0;
-        text-align: center;
-        font-size: 24px;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .positive {
+    /* Main background */
+    .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
     }
-    .negative {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-    }
-    .metric-card {
+    
+    /* Card styling */
+    .card {
         background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin: 20px 0;
+    }
+    
+    /* Header styling */
+    .main-header {
+        text-align: center;
+        color: white;
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    h1 {
-        color: #1f1f1f;
-        text-align: center;
-        font-size: 48px;
-        margin-bottom: 10px;
-    }
-    .subtitle {
-        text-align: center;
-        color: #666;
-        font-size: 18px;
         margin-bottom: 30px;
     }
+    
+    .main-header h1 {
+        font-size: 3.5em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .main-header p {
+        font-size: 1.2em;
+        opacity: 0.9;
+    }
+    
+    /* Metrics styling */
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    }
+    
+    .metric-value {
+        font-size: 2.5em;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    .metric-label {
+        font-size: 1.1em;
+        opacity: 0.9;
+    }
+    
+    /* Button styling */
+    .stButton>button {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 1.1em;
+        font-weight: 600;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Text area styling */
+    .stTextArea textarea {
+        border-radius: 10px;
+        border: 2px solid #667eea;
+        font-size: 1.1em;
+        padding: 15px;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg {
+        background: rgba(255, 255, 255, 0.95);
+    }
+    
+    /* Result boxes */
+    .result-positive {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        text-align: center;
+        font-size: 1.5em;
+        font-weight: bold;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        margin: 20px 0;
+    }
+    
+    .result-negative {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        text-align: center;
+        font-size: 1.5em;
+        font-weight: bold;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        margin: 20px 0;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# Text cleaning function
-def clean_text(text):
-    """Clean and preprocess text"""
-    text = str(text).lower()
-    text = re.sub(r'http\S+|www\S+', '', text)
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    text = ' '.join(text.split())
-    return text
-
-# Load models function
+# ========================================
+# LOAD MODELS
+# ========================================
 @st.cache_resource
 def load_models():
-    """Load all trained models and vectorizer"""
+    """Load the trained models from pickle files"""
     try:
-        tfidf = pickle.load(open('models/tfidf_vectorizer.pkl', 'rb'))
-        nb_model = pickle.load(open('models/naive_bayes_model.pkl', 'rb'))
-        lr_model = pickle.load(open('models/logistic_regression_model.pkl', 'rb'))
-        rf_model = pickle.load(open('models/random_forest_model.pkl', 'rb'))
-        return tfidf, nb_model, lr_model, rf_model
+        with open('models/tfidf_vectorizer.pkl', 'rb') as f:
+            tfidf = pickle.load(f)
+        with open('models/logistic_regression_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+        return tfidf, model
     except FileNotFoundError:
-        st.error("⚠️ Model files not found! Please ensure all model files are in the 'models/' folder.")
-        return None, None, None, None
+        st.error("⚠️ Model files not found! Please ensure 'models/' directory contains the required .pkl files.")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ Error loading models: {str(e)}")
+        st.stop()
 
-# Prediction function
-def predict_sentiment(text, model, tfidf):
-    """Predict sentiment using selected model"""
-    cleaned = clean_text(text)
-    text_vectorized = tfidf.transform([cleaned])
+# ========================================
+# TEXT PREPROCESSING
+# ========================================
+def clean_text(text):
+    """Clean and preprocess text (same as training)"""
+    text = str(text).lower()
+    text = re.sub(r'http\S+|www\S+', '', text)  # Remove URLs
+    text = re.sub(r'[^a-zA-Z\s]', '', text)     # Remove special characters
+    text = ' '.join(text.split())                # Remove extra spaces
+    return text
+
+# ========================================
+# PREDICTION FUNCTION
+# ========================================
+def predict_sentiment(text, tfidf, model):
+    """
+    Predict sentiment of input text
+    Returns: sentiment (str), confidence (float), probabilities (dict)
+    """
+    # Clean text
+    cleaned_text = clean_text(text)
+    
+    # Transform to TF-IDF features
+    text_vectorized = tfidf.transform([cleaned_text])
+    
+    # Predict
     prediction = model.predict(text_vectorized)[0]
     
-    # Get probability if available
-    if hasattr(model, 'predict_proba'):
-        proba = model.predict_proba(text_vectorized)[0]
-        confidence = max(proba) * 100
-        pos_prob = proba[1] * 100 if prediction == 'Positive' else proba[0] * 100
-        neg_prob = proba[0] * 100 if prediction == 'Positive' else proba[1] * 100
-    else:
-        confidence = None
-        pos_prob = None
-        neg_prob = None
+    # Get probabilities
+    probabilities = model.predict_proba(text_vectorized)[0]
     
-    return prediction, confidence, pos_prob, neg_prob
+    # Get confidence (max probability)
+    confidence = max(probabilities) * 100
+    
+    # Create probability dictionary
+    prob_dict = {
+        'Negative': probabilities[0] * 100,
+        'Positive': probabilities[1] * 100
+    }
+    
+    return prediction, confidence, prob_dict
 
-# Main app
+# ========================================
+# MAIN APP
+# ========================================
 def main():
-    # Header
-    st.markdown("<h1>🎭 Sentiment Analysis App</h1>", unsafe_allow_html=True)
-    st.markdown("<p class='subtitle'>Analyze customer reviews using Machine Learning • Trained on 150,000+ Amazon Reviews</p>", unsafe_allow_html=True)
-    
     # Load models
-    tfidf, nb_model, lr_model, rf_model = load_models()
+    tfidf, model = load_models()
     
-    if tfidf is None:
-        st.stop()
+    # Header
+    st.markdown("""
+        <div class="main-header">
+            <h1>🎭 Sentiment Analysis App</h1>
+            <p>Powered by Machine Learning | Trained on 150,000+ Amazon Reviews</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Sidebar
+    # ========================================
+    # SIDEBAR - INFO & STATS
+    # ========================================
     with st.sidebar:
-        st.image("https://img.icons8.com/clouds/200/000000/machine-learning.png", width=150)
-        st.title("⚙️ Settings")
-        st.markdown("---")
-        
-        # Model selection
-        model_option = st.selectbox(
-            "🤖 Select ML Algorithm",
-            ["Logistic Regression", "Naive Bayes", "Random Forest"],
-            help="Choose which machine learning model to use for prediction"
-        )
+        st.image("https://img.icons8.com/fluency/96/000000/artificial-intelligence.png", width=80)
+        st.title("📊 Model Info")
         
         st.markdown("---")
         
-        # Model info
-        st.markdown("### 📊 Model Information")
-        if model_option == "Logistic Regression":
-            st.info("**Best Overall Performance**\n\n✅ Accuracy: ~89%\n⚡ Speed: Fast\n💡 Best for: General use")
-        elif model_option == "Naive Bayes":
-            st.info("**Fastest Model**\n\n✅ Accuracy: ~87%\n⚡ Speed: Very Fast\n💡 Best for: Real-time analysis")
-        else:
-            st.info("**Most Robust**\n\n✅ Accuracy: ~88%\n⚡ Speed: Slower\n💡 Best for: Complex patterns")
+        st.markdown("### 🤖 Algorithm")
+        st.info("**Logistic Regression**")
+        
+        st.markdown("### 📈 Accuracy")
+        st.success("**88.96%** on test data")
+        
+        st.markdown("### 📚 Training Data")
+        st.info("**150,000** Amazon Reviews")
+        
+        st.markdown("### 🔤 Features")
+        st.info("**10,000** TF-IDF features")
         
         st.markdown("---")
         
-        # Statistics
-        st.markdown("### 📈 Dataset Stats")
-        st.metric("Training Samples", "120,000")
-        st.metric("Test Samples", "30,000")
-        st.metric("Features Used", "10,000")
-        
-        st.markdown("---")
-        st.markdown("### 👨‍💻 About")
-        st.markdown("""
-        Built with:
-        - Streamlit
-        - Scikit-learn
-        - TF-IDF Vectorization
-        - 3 ML Algorithms
+        st.markdown("### 💡 How it works")
+        st.write("""
+        1. **Text Preprocessing**: Clean & normalize text
+        2. **Feature Extraction**: Convert to TF-IDF vectors
+        3. **Classification**: Predict sentiment using ML
         """)
-    
-    # Select model based on user choice
-    if model_option == "Logistic Regression":
-        selected_model = lr_model
-    elif model_option == "Naive Bayes":
-        selected_model = nb_model
-    else:
-        selected_model = rf_model
-    
-    # Main content
-    tab1, tab2, tab3 = st.tabs(["🔍 Single Prediction", "📊 Batch Analysis", "📚 Examples"])
-    
-    # TAB 1: Single Prediction
-    with tab1:
-        st.markdown("### 📝 Enter Your Review")
         
-        col1, col2 = st.columns([3, 1])
+        st.markdown("---")
+        
+        # Analytics if history exists
+        if 'history' in st.session_state and len(st.session_state.history) > 0:
+            st.markdown("### 📊 Session Analytics")
+            total = len(st.session_state.history)
+            positive = sum(1 for h in st.session_state.history if h['sentiment'] == 'Positive')
+            negative = total - positive
+            
+            st.metric("Total Analyses", total)
+            st.metric("Positive", f"{positive} ({positive/total*100:.1f}%)")
+            st.metric("Negative", f"{negative} ({negative/total*100:.1f}%)")
+    
+    # ========================================
+    # MAIN CONTENT AREA
+    # ========================================
+    
+    # Create tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Analyze Text", "📝 Batch Analysis", "📊 History", "ℹ️ About"])
+    
+    # ========================================
+    # TAB 1: SINGLE TEXT ANALYSIS
+    # ========================================
+    with tab1:
+        st.markdown("### 🎯 Analyze Single Review")
+        
+        col1, col2 = st.columns([2, 1])
         
         with col1:
+            # Text input
             user_input = st.text_area(
-                "Type or paste your product review here:",
-                height=150,
-                placeholder="Example: This product is amazing! Best purchase I've ever made. Highly recommended!",
-                help="Enter any product review to analyze its sentiment"
+                "Enter your text here:",
+                height=200,
+                placeholder="e.g., This product is amazing! I love it so much. Best purchase ever!",
+                help="Enter any product review, comment, or feedback to analyze its sentiment"
             )
+            
+            # Quick examples
+            st.markdown("**Quick Examples:**")
+            example_col1, example_col2, example_col3 = st.columns(3)
+            
+            with example_col1:
+                if st.button("😊 Positive Example"):
+                    user_input = "This product is absolutely amazing! Best purchase I've ever made. Highly recommend to everyone!"
+                    st.rerun()
+            
+            with example_col2:
+                if st.button("😞 Negative Example"):
+                    user_input = "Terrible quality. Broke after one day. Complete waste of money. Very disappointed."
+                    st.rerun()
+            
+            with example_col3:
+                if st.button("😐 Mixed Example"):
+                    user_input = "The product is okay. Quality is decent but nothing special. Price could be better."
+                    st.rerun()
+            
+            # Analyze button
+            analyze_button = st.button("🔍 Analyze Sentiment", use_container_width=True, type="primary")
         
         with col2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            analyze_button = st.button("🚀 Analyze Sentiment", type="primary", use_container_width=True)
-            clear_button = st.button("🗑️ Clear", use_container_width=True)
+            st.markdown("### 📌 Tips")
+            st.info("""
+            ✅ Enter honest reviews
             
-            if clear_button:
-                st.rerun()
+            ✅ Be descriptive
+            
+            ✅ Any length works
+            
+            ✅ Try different tones
+            """)
         
-        if analyze_button and user_input:
+        # Analysis results
+        if analyze_button and user_input.strip():
             with st.spinner("🔄 Analyzing sentiment..."):
-                prediction, confidence, pos_prob, neg_prob = predict_sentiment(
-                    user_input, selected_model, tfidf
-                )
+                time.sleep(0.5)  # Small delay for effect
                 
-                # Results
+                # Get prediction
+                sentiment, confidence, prob_dict = predict_sentiment(user_input, tfidf, model)
+                
+                # Display results
                 st.markdown("---")
-                st.markdown("### 🎯 Analysis Results")
+                st.markdown("## 🎯 Analysis Results")
                 
-                # Prediction box
-                if prediction == "Positive":
+                # Result card
+                if sentiment == 'Positive':
                     st.markdown(f"""
-                        <div class='prediction-box positive'>
-                            😊 POSITIVE SENTIMENT
+                        <div class="result-positive">
+                            <div style="font-size: 3em; margin-bottom: 10px;">😊 ✅</div>
+                            <div>POSITIVE SENTIMENT</div>
+                            <div style="font-size: 0.8em; margin-top: 10px; opacity: 0.9;">
+                                Confidence: {confidence:.1f}%
+                            </div>
                         </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
-                        <div class='prediction-box negative'>
-                            😞 NEGATIVE SENTIMENT
+                        <div class="result-negative">
+                            <div style="font-size: 3em; margin-bottom: 10px;">😞 ❌</div>
+                            <div>NEGATIVE SENTIMENT</div>
+                            <div style="font-size: 0.8em; margin-top: 10px; opacity: 0.9;">
+                                Confidence: {confidence:.1f}%
+                            </div>
                         </div>
                     """, unsafe_allow_html=True)
                 
-                # Metrics
+                # Detailed metrics
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    st.metric("Model Used", model_option)
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Sentiment</div>
+                            <div class="metric-value">{sentiment}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 with col2:
-                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    if confidence:
-                        st.metric("Confidence", f"{confidence:.1f}%")
-                    else:
-                        st.metric("Confidence", "N/A")
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Confidence</div>
+                            <div class="metric-value">{confidence:.1f}%</div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
                 with col3:
-                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    st.metric("Text Length", f"{len(user_input)} chars")
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    word_count = len(user_input.split())
+                    st.markdown(f"""
+                        <div class="metric-card">
+                            <div class="metric-label">Words</div>
+                            <div class="metric-value">{word_count}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
                 
-                # Probability chart
-                if pos_prob is not None and neg_prob is not None:
-                    st.markdown("### 📊 Probability Distribution")
-                    
-                    fig = go.Figure(data=[
-                        go.Bar(
-                            x=['Positive', 'Negative'],
-                            y=[pos_prob, neg_prob],
-                            marker_color=['#667eea', '#f5576c'],
-                            text=[f'{pos_prob:.1f}%', f'{neg_prob:.1f}%'],
-                            textposition='auto',
-                        )
-                    ])
-                    
-                    fig.update_layout(
-                        title="Sentiment Probability",
-                        yaxis_title="Probability (%)",
-                        height=400,
-                        showlegend=False,
-                        plot_bgcolor='white'
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
+                # Probability gauge chart
+                st.markdown("### 📊 Confidence Breakdown")
+                
+                fig = go.Figure(go.Bar(
+                    x=[prob_dict['Positive'], prob_dict['Negative']],
+                    y=['Positive', 'Negative'],
+                    orientation='h',
+                    marker=dict(
+                        color=['#38ef7d', '#f45c43'],
+                        line=dict(color='white', width=2)
+                    ),
+                    text=[f"{prob_dict['Positive']:.1f}%", f"{prob_dict['Negative']:.1f}%"],
+                    textposition='auto',
+                    textfont=dict(size=14, color='white', family='Arial Black')
+                ))
+                
+                fig.update_layout(
+                    title="Sentiment Probabilities",
+                    xaxis_title="Confidence (%)",
+                    yaxis_title="Sentiment",
+                    height=300,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(size=12),
+                    xaxis=dict(range=[0, 100])
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Save to history
+                if 'history' not in st.session_state:
+                    st.session_state.history = []
+                
+                st.session_state.history.append({
+                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'text': user_input[:100] + "..." if len(user_input) > 100 else user_input,
+                    'sentiment': sentiment,
+                    'confidence': confidence
+                })
         
-        elif analyze_button and not user_input:
+        elif analyze_button and not user_input.strip():
             st.warning("⚠️ Please enter some text to analyze!")
     
-    # TAB 2: Batch Analysis
+    # ========================================
+    # TAB 2: BATCH ANALYSIS
+    # ========================================
     with tab2:
-        st.markdown("### 📊 Analyze Multiple Reviews")
-        st.markdown("Enter multiple reviews (one per line) to analyze them all at once.")
+        st.markdown("### 📝 Batch Analysis")
+        st.info("Analyze multiple reviews at once! Enter one review per line.")
         
         batch_input = st.text_area(
-            "Enter reviews (one per line):",
-            height=200,
-            placeholder="Great product!\nTerrible quality, don't buy.\nWorks as expected.\nBest purchase ever!",
-            help="Each line will be analyzed separately"
+            "Enter multiple reviews (one per line):",
+            height=300,
+            placeholder="Great product!\nTerrible quality.\nLove it!"
         )
         
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            batch_analyze = st.button("📈 Analyze All", type="primary", use_container_width=True)
-        with col2:
-            batch_clear = st.button("🗑️ Clear All", use_container_width=True)
-        
-        if batch_clear:
-            st.rerun()
-        
-        if batch_analyze and batch_input:
-            reviews = [r.strip() for r in batch_input.split('\n') if r.strip()]
-            
-            if len(reviews) > 0:
-                with st.spinner(f"🔄 Analyzing {len(reviews)} reviews..."):
-                    results = []
-                    
-                    for review in reviews:
-                        pred, conf, _, _ = predict_sentiment(review, selected_model, tfidf)
-                        results.append({
-                            'Review': review[:100] + '...' if len(review) > 100 else review,
-                            'Sentiment': pred,
-                            'Confidence': f"{conf:.1f}%" if conf else "N/A"
-                        })
-                    
-                    # Create DataFrame
-                    df_results = pd.DataFrame(results)
-                    
-                    # Summary metrics
-                    st.markdown("---")
-                    st.markdown("### 📊 Summary Statistics")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    positive_count = sum(1 for r in results if r['Sentiment'] == 'Positive')
-                    negative_count = len(results) - positive_count
-                    
-                    with col1:
-                        st.metric("Total Reviews", len(reviews))
-                    with col2:
-                        st.metric("Positive", positive_count, delta=f"{positive_count/len(reviews)*100:.1f}%")
-                    with col3:
-                        st.metric("Negative", negative_count, delta=f"{negative_count/len(reviews)*100:.1f}%")
-                    with col4:
-                        sentiment = "Satisfied ✅" if positive_count > negative_count else "Unsatisfied ⚠️"
-                        st.metric("Overall", sentiment)
-                    
-                    # Pie chart
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        fig_pie = px.pie(
+        if st.button("🔍 Analyze All", use_container_width=True, type="primary"):
+            if batch_input.strip():
+                reviews = [r.strip() for r in batch_input.split('\n') if r.strip()]
+                
+                if len(reviews) > 0:
+                    with st.spinner(f"🔄 Analyzing {len(reviews)} reviews..."):
+                        results = []
+                        for review in reviews:
+                            sentiment, confidence, _ = predict_sentiment(review, tfidf, model)
+                            results.append({
+                                'Review': review[:50] + "..." if len(review) > 50 else review,
+                                'Sentiment': sentiment,
+                                'Confidence': f"{confidence:.1f}%"
+                            })
+                        
+                        # Display results
+                        st.success(f"✅ Analyzed {len(reviews)} reviews!")
+                        
+                        # Summary
+                        positive_count = sum(1 for r in results if r['Sentiment'] == 'Positive')
+                        negative_count = len(results) - positive_count
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total Reviews", len(results))
+                        with col2:
+                            st.metric("Positive", f"{positive_count} ({positive_count/len(results)*100:.1f}%)")
+                        with col3:
+                            st.metric("Negative", f"{negative_count} ({negative_count/len(results)*100:.1f}%)")
+                        
+                        # Results table
+                        st.markdown("### 📊 Detailed Results")
+                        df = pd.DataFrame(results)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        
+                        # Pie chart
+                        fig = px.pie(
                             values=[positive_count, negative_count],
                             names=['Positive', 'Negative'],
                             title='Sentiment Distribution',
-                            color_discrete_sequence=['#667eea', '#f5576c']
+                            color_discrete_sequence=['#38ef7d', '#f45c43']
                         )
-                        st.plotly_chart(fig_pie, use_container_width=True)
-                    
-                    with col2:
-                        # Results table
-                        st.markdown("### 📋 Detailed Results")
-                        st.dataframe(df_results, use_container_width=True, height=400)
-                    
-                    # Download button
-                    csv = df_results.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Results (CSV)",
-                        data=csv,
-                        file_name=f"sentiment_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("⚠️ Please enter at least one review!")
     
-    # TAB 3: Examples
+    # ========================================
+    # TAB 3: HISTORY
+    # ========================================
     with tab3:
-        st.markdown("### 📚 Example Reviews")
-        st.markdown("Click on any example to see how the model analyzes it.")
+        st.markdown("### 📊 Analysis History")
         
-        examples = {
-            "🌟 Highly Positive": [
-                "This product is absolutely amazing! Best purchase I've ever made. Highly recommend to everyone!",
-                "Exceeded all my expectations! Outstanding quality and fast shipping. Will definitely buy again!",
-                "Love it! Perfect in every way. My family is so happy with this purchase."
-            ],
-            "😊 Positive": [
-                "Good product. Does what it's supposed to do. Happy with the purchase.",
-                "Nice quality and arrived on time. Would recommend.",
-                "Pretty satisfied with this. Works well for the price."
-            ],
-            "😐 Neutral": [
-                "It's okay. Nothing special but gets the job done.",
-                "Average product. Neither good nor bad.",
-                "Decent for the price. Has some pros and cons."
-            ],
-            "😞 Negative": [
-                "Not satisfied with the quality. Expected better.",
-                "Disappointed. Doesn't work as advertised.",
-                "Below average. Would not recommend this product."
-            ],
-            "⛔ Highly Negative": [
-                "Terrible quality! Broke after one day. Complete waste of money!",
-                "Awful product. Don't buy this. Worst purchase ever!",
-                "Horrible experience. Poor quality and terrible customer service."
-            ]
-        }
+        if 'history' in st.session_state and len(st.session_state.history) > 0:
+            # Summary metrics
+            total = len(st.session_state.history)
+            positive = sum(1 for h in st.session_state.history if h['sentiment'] == 'Positive')
+            negative = total - positive
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Analyses", total)
+            with col2:
+                st.metric("Positive", f"{positive} ({positive/total*100:.1f}%)", delta="Good" if positive > negative else None)
+            with col3:
+                st.metric("Negative", f"{negative} ({negative/total*100:.1f}%)", delta="Bad" if negative > positive else None)
+            
+            # History table
+            st.markdown("---")
+            df_history = pd.DataFrame(st.session_state.history)
+            st.dataframe(df_history, use_container_width=True, hide_index=True)
+            
+            # Clear history button
+            if st.button("🗑️ Clear History", type="secondary"):
+                st.session_state.history = []
+                st.rerun()
+        else:
+            st.info("📝 No analysis history yet. Start analyzing some text!")
+    
+    # ========================================
+    # TAB 4: ABOUT
+    # ========================================
+    with tab4:
+        st.markdown("### ℹ️ About This Project")
         
-        for category, reviews in examples.items():
-            with st.expander(f"**{category}**"):
-                for idx, example in enumerate(reviews):
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.markdown(f"*{example}*")
-                    with col2:
-                        if st.button("Try This", key=f"{category}_{idx}"):
-                            pred, conf, _, _ = predict_sentiment(example, selected_model, tfidf)
-                            
-                            if pred == "Positive":
-                                st.success(f"✅ {pred} ({conf:.1f}%)")
-                            else:
-                                st.error(f"❌ {pred} ({conf:.1f}%)")
-                    st.markdown("---")
+        st.markdown("""
+        ## 🎯 Sentiment Analysis Application
+        
+        This application uses **Machine Learning** to automatically determine whether text expresses 
+        a **positive** or **negative** sentiment.
+        
+        ### 🔧 Technical Details
+        
+        - **Algorithm**: Logistic Regression
+        - **Training Data**: 150,000 Amazon Product Reviews
+        - **Accuracy**: 88.96% on test set
+        - **Features**: TF-IDF vectorization with 10,000 features
+        - **Framework**: Streamlit + Scikit-learn
+        
+        ### 📊 Model Performance
+        
+        | Metric | Score |
+        |--------|-------|
+        | Accuracy | 88.96% |
+        | Precision | 89.2% |
+        | Recall | 88.7% |
+        | F1-Score | 88.9% |
+        
+        ### 🚀 Use Cases
+        
+        - 📦 **E-commerce**: Analyze product reviews
+        - 💬 **Social Media**: Monitor brand sentiment
+        - 📧 **Customer Support**: Prioritize negative feedback
+        - 📊 **Market Research**: Understand customer opinions
+        
+        ### 👨‍💻 Developer
+        
+        Built with ❤️ using Python, Streamlit, and Scikit-learn
+        
+        ---
+        
+        *For questions or feedback, feel free to reach out!*
+        """)
 
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-        <div style='text-align: center; color: #666; padding: 20px;'>
-            <p>🎯 Built with Streamlit & Scikit-learn | Trained on 150,000+ Amazon Reviews</p>
-            <p>Made with ❤️ for sentiment analysis</p>
-        </div>
-    """, unsafe_allow_html=True)
-
+# ========================================
+# RUN APP
+# ========================================
 if __name__ == "__main__":
+    # Initialize session state
+    if 'history' not in st.session_state:
+        st.session_state.history = []
+    
     main()
