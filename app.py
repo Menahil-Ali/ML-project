@@ -181,33 +181,41 @@ def clean_text(text):
 # ========================================
 # PREDICTION FUNCTION
 # ========================================
-def predict_sentiment(text, tfidf, model):
-    """
-    Predict sentiment of input text
-    Returns: sentiment (str), confidence (float), probabilities (dict)
-    """
-    # Clean text
-    cleaned_text = clean_text(text)
+# def predict_sentiment(text, tfidf, model):
+#     """
+#     Predict sentiment of input text
+#     Returns: sentiment (str), confidence (float), probabilities (dict)
+#     """
+#     # Clean text
+#     cleaned_text = clean_text(text)
     
-    # Transform to TF-IDF features
-    text_vectorized = tfidf.transform([cleaned_text])
+#     # Transform to TF-IDF features
+#     text_vectorized = tfidf.transform([cleaned_text])
     
-    # Predict
-    prediction = model.predict(text_vectorized)[0]
+#     # Predict
+#     prediction = model.predict(text_vectorized)[0]
     
-    # Get probabilities
-    probabilities = model.predict_proba(text_vectorized)[0]
+#     # Get probabilities
+#     probabilities = model.predict_proba(text_vectorized)[0]
     
-    # Get confidence (max probability)
-    confidence = max(probabilities) * 100
+#     # Get confidence (max probability)
+#     confidence = max(probabilities) * 100
     
-    # Create probability dictionary
-    prob_dict = {
-        'Negative': probabilities[0] * 100,
-        'Positive': probabilities[1] * 100
-    }
+#     # Create probability dictionary
+#     prob_dict = {
+#         'Negative': probabilities[0] * 100,
+#         'Positive': probabilities[1] * 100
+#     }
     
     return prediction, confidence, prob_dict
+
+def predict_sentiment(text, tfidf, model):
+    cleaned_text = clean_text(text)
+    text_vectorized = tfidf.transform([cleaned_text])  # works fine now
+    prediction = model.predict(text_vectorized)[0]
+    prob = model.predict_proba(text_vectorized)[0]
+    confidence = max(prob)
+    return prediction, confidence, {"Positive": prob[1], "Negative": prob[0]}
 
 # ========================================
 # MAIN APP
